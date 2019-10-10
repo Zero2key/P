@@ -18,57 +18,46 @@ class P {
   constructor(executor) {
     this[PromiseStatus] = PromiseStatusMap.pending;
     this[PromiseValue] = undefined;
-    this.thenList = [];
-    this.catchList = [];
+    this.nextList = [];
 
     const reject = reason => {
-      if (this[PromiseStatus] === PromiseStatusMap.pending) {
-        this[PromiseValue] = reason;
-        this[PromiseStatus] = PromiseStatusMap.rejected;
-        if (!(this.thenList.length || this.catchList.length)) {
-          throw new UnCatchedError(reason);
-        }
-        setTimeout(() => {
-          this.thenList.forEach(t => {
+      setTimeout(() => {
+        if (this[PromiseStatus] === PromiseStatusMap.pending) {
+          this[PromiseValue] = reason;
+          this[PromiseStatus] = PromiseStatusMap.rejected;
+          if (!this.nextList.length) {
+            throw new UnCatchedError(reason);
+          }
+          this.nextList.forEach(t => {
             if (t.onrejected) {
               t.resolve(t.onrejected(this[PromiseValue]));
             } else {
               t.reject(this[PromiseValue]);
             }
           });
-          this.catchList.forEach(c => {
-            if (c.onrejected) {
-              c.resolve(c.onrejected(this[PromiseValue]));
-            } else {
-              c.reject(this[PromiseValue]);
-            }
-          });
-          this.thenList = [];
-          this.catchList = [];
-        });
-      }
+          this.nextList = [];
+        }
+      });
     };
     const resolve = value => {
       if (value && value.then && typeof value.then === 'function') {
         value.then(resolve, reject);
         return;
       }
-      if (this[PromiseStatus] === PromiseStatusMap.pending) {
-        this[PromiseValue] = value;
-        this[PromiseStatus] = PromiseStatusMap.resolved;
-        setTimeout(() => {
-          this.thenList.forEach(t => {
+      setTimeout(() => {
+        if (this[PromiseStatus] === PromiseStatusMap.pending) {
+          this[PromiseValue] = value;
+          this[PromiseStatus] = PromiseStatusMap.resolved;
+          this.nextList.forEach(t => {
             if (t.onfulfilled) {
               t.resolve(t.onfulfilled(this[PromiseValue]));
             } else {
               t.resolve(this[PromiseValue]);
             }
           });
-          this.catchList.forEach(c => {
-            c.resolve(this[PromiseValue]);
-          });
-        });
-      }
+          this.nextList = [];
+        }
+      });
     };
     try {
       executor(resolve, reject);
@@ -82,10 +71,10 @@ class P {
     }
   }
 
-  then(onfulfilled, onrejected) {
+  _then(onfulfilled, onrejected) {
     if (this[PromiseStatus] === PromiseStatusMap.pending) {
       return new P((resolve, reject) => {
-        this.thenList.push({
+        this.nextList.push({
           resolve,
           reject,
           onfulfilled,
@@ -94,59 +83,29 @@ class P {
       });
     } else if (this[PromiseStatus] === PromiseStatusMap.resolved && onfulfilled) {
       return new P(resolve => {
-        setTimeout(() => {
-          resolve(onfulfilled(this[PromiseValue]));
-        });
+        resolve(onfulfilled(this[PromiseValue]));
       });
     } else if (this[PromiseStatus] === PromiseStatusMap.resolved) {
       return new P(resolve => {
-        setTimeout(() => {
-          resolve(this[PromiseValue]);
-        });
+        resolve(this[PromiseValue]);
       });
     } else if (this[PromiseStatus] === PromiseStatusMap.rejected && onrejected) {
       return new P(resolve => {
-        setTimeout(() => {
-          resolve(onrejected(this[PromiseValue]));
-        });
+        resolve(onrejected(this[PromiseValue]));
       });
     } else if (this[PromiseStatus] === PromiseStatusMap.rejected) {
       return new P((_, reject) => {
-        setTimeout(() => {
-          reject(this[PromiseValue]);
-        });
+        reject(this[PromiseValue]);
       });
     }
   }
 
+  then(onfulfilled, onrejected) {
+    return this._then(onfulfilled, onrejected);
+  }
+
   catch(onrejected) {
-    if (this[PromiseStatus] === PromiseStatusMap.pending) {
-      return new P((resolve, reject) => {
-        this.catchList.push({
-          resolve,
-          reject,
-          onrejected
-        });
-      });
-    } else if (this[PromiseStatus] === PromiseStatusMap.resolved) {
-      return new P(resolve => {
-        setTimeout(() => {
-          resolve(this[PromiseValue]);
-        });
-      });
-    } else if (this[PromiseStatus] === PromiseStatusMap.rejected && onrejected) {
-      return new P(resolve => {
-        setTimeout(() => {
-          resolve(onrejected(this[PromiseValue]));
-        });
-      });
-    } else if (this[PromiseStatus] === PromiseStatusMap.rejected) {
-      return new P((_, reject) => {
-        setTimeout(() => {
-          reject(this[PromiseValue]);
-        });
-      });
-    }
+    return this._then(undefined, onrejected);
   }
 }
 

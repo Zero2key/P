@@ -8,8 +8,7 @@ describe('core', () => {
     const p = new P(() => undefined);
     expect(p['[[PromiseValue]]']).toBeUndefined();
     expect(p['[[PromiseStatus]]']).toBe('pending');
-    expect(p.thenList).toStrictEqual([]);
-    expect(p.catchList).toStrictEqual([]);
+    expect(p.nextList).toStrictEqual([]);
   });
   test('resolve', () => {
     return new P(r => r(1)).then(v => expect(v).toBe(1));
