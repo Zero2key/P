@@ -107,6 +107,42 @@ class P {
   catch(onrejected) {
     return this._then(undefined, onrejected);
   }
+
+  static resolve(value) {
+    return new P(resolve => resolve(value));
+  }
+
+  static reject(reason) {
+    return new P((_, reject) => reject(reason));
+  }
+
+  static all(pArray) {
+    if (!Array.isArray(pArray)) {
+      throw new Error('Arguments is not Array');
+    }
+    return new P((resolve, reject) => {
+      const rets = Array(pArray.length);
+      let num = 0;
+      pArray.forEach((p, index) =>
+        P.resolve(p).then(value => {
+          rets[index] = value;
+          num++;
+          if (num === pArray.length) {
+            resolve(rets);
+          }
+        }, reject)
+      );
+    });
+  }
+
+  static race(pArray) {
+    if (!Array.isArray(pArray)) {
+      throw new Error('Arguments is not Array');
+    }
+    return new P((resolve, reject) => {
+      pArray.forEach(p => P.resolve(p).then(resolve, reject));
+    });
+  }
 }
 
 module.exports = P;
